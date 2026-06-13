@@ -107,15 +107,13 @@ func NewFileInfo(name string, data *unix.Stat_t) FileInfo {
 		name:    name,
 		isDir:   data.Mode&unix.S_IFMT == unix.S_IFDIR,
 		size:    data.Size,
-		modTime: time.Unix(int64(data.Mtim.Sec), int64(data.Mtim.Nsec)).Unix(),
+		modTime: time.Unix(data.Mtim.Sec, data.Mtim.Nsec).Unix(),
 	}
 }
 
 var direntBufPool = sync.Pool{
 	New: func() any {
-		b := make([]byte, 1024*64)
-
-		return &b
+		return new(make([]byte, 1024*64))
 	},
 }
 

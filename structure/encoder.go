@@ -20,9 +20,7 @@ var bufferPool = sync.Pool{
 	New: func() any {
 		// 48 bytes for 2 int64 and 4 uint64, 1 byte for dir flag, and 4 bytes
 		// for the number of child entries.
-		buf := make([]byte, 8*6+1+4)
-
-		return &buf
+		return new(make([]byte, 8*6+1+4))
 	},
 }
 

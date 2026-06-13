@@ -376,9 +376,7 @@ func (t *Tree) TraverseAsync(skipCache bool) (chan struct{}, chan error) {
 
 var childPathBufPool = sync.Pool{
 	New: func() any {
-		b := make([]byte, 0, childPathBufSize)
-
-		return &b
+		return new(make([]byte, 0, childPathBufSize))
 	},
 }
 
