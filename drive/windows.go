@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	"os/exec"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"syscall"
@@ -23,13 +24,14 @@ var (
 )
 
 var (
-	procGetDiskFreeSpaceEx   = systemDLL.NewProc("GetDiskFreeSpaceExW")
-	procFindFirstFile        = systemDLL.NewProc("FindFirstFileW")
-	procFindNextFile         = systemDLL.NewProc("FindNextFileW")
-	procGetLogicalDrives     = systemDLL.NewProc("GetLogicalDrives")
-	procGetVolumeInformation = systemDLL.NewProc("GetVolumeInformationA")
-	procFindClose            = systemDLL.NewProc("FindClose")
-	procShellExecute         = shellDLL.NewProc("ShellExecuteW")
+	procGetDiskFreeSpaceEx    = systemDLL.NewProc("GetDiskFreeSpaceExW")
+	procGetCompressedFileSize = systemDLL.NewProc("GetCompressedFileSizeW")
+	procFindFirstFile         = systemDLL.NewProc("FindFirstFileW")
+	procFindNextFile          = systemDLL.NewProc("FindNextFileW")
+	procGetLogicalDrives      = systemDLL.NewProc("GetLogicalDrives")
+	procGetVolumeInformation  = systemDLL.NewProc("GetVolumeInformationA")
+	procFindClose             = systemDLL.NewProc("FindClose")
+	procShellExecute          = shellDLL.NewProc("ShellExecuteW")
 )
 
 type driveSpace struct {
@@ -52,11 +54,54 @@ type win32finddata1 struct {
 	AlternateFileName [14]uint16
 }
 
-func NewFileInfo(alloc Allocator, data *win32finddata1) FileInfo {
+type compressedFileSizeFunc func(path *uint16, high *uint32) (uintptr, syscall.Errno)
+
+const invalidFileSize = ^uint32(0)
+
+func logicalFileSize(data *win32finddata1) int64 {
+	return int64(data.FileSizeHigh)<<32 + int64(data.FileSizeLow)
+}
+
+func allocatedFileSize(path string, data *win32finddata1) int64 {
+	return allocatedFileSizeForPath(path, logicalFileSize(data), getCompressedFileSize)
+}
+
+func allocatedFileSizeForPath(path string, fallback int64, getCompressedFileSize compressedFileSizeFunc) int64 {
+	pathPtr, err := syscall.UTF16PtrFromString(path)
+	if err != nil {
+		return fallback
+	}
+
+	high := uint32(0)
+	low, errno := getCompressedFileSize(pathPtr, &high)
+	if low > uintptr(invalidFileSize) {
+		return fallback
+	}
+
+	low32 := uint32(low)
+
+	if low32 == invalidFileSize && errno != 0 {
+		return fallback
+	}
+
+	return int64(high)<<32 + int64(low32)
+}
+
+func getCompressedFileSize(path *uint16, high *uint32) (uintptr, syscall.Errno) {
+	low, _, errno := syscall.SyscallN(
+		procGetCompressedFileSize.Addr(),
+		uintptr(unsafe.Pointer(path)),
+		uintptr(unsafe.Pointer(high)),
+	)
+
+	return low, errno
+}
+
+func NewFileInfo(alloc Allocator, data *win32finddata1, size int64) FileInfo {
 	return FileInfo{
 		name:    UTF16ToString(alloc, data.FileName[:]),
 		isDir:   data.FileAttributes&16 != 0,
-		size:    int64(data.FileSizeHigh)<<32 + int64(data.FileSizeLow),
+		size:    size,
 		modTime: time.Unix(0, data.LastWriteTime.Nanoseconds()).Unix(),
 	}
 }
@@ -296,7 +341,8 @@ func ReadDir(alloc Allocator, path string) ([]FileInfo, error) {
 
 		//nolint:staticcheck // the alternative is even worse
 		if !(name[0] == '.' && (name[1] == 0 || (name[1] == '.' && name[2] == 0))) {
-			fis = append(fis, NewFileInfo(alloc, &data))
+			entryName := UTF16ToString(alloc, data.FileName[:])
+			fis = append(fis, NewFileInfo(alloc, &data, allocatedFileSize(filepath.Join(path, entryName), &data)))
 		}
 
 		result, _, _ := syscall.SyscallN(
