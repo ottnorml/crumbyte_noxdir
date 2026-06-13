@@ -93,7 +93,7 @@ func NewFileInfo(name string, data *unix.Stat_t) FileInfo {
 	return FileInfo{
 		name:    name,
 		isDir:   data.Mode&unix.S_IFMT == unix.S_IFDIR,
-		size:    data.Size,
+		size:    allocatedSizeFromBlocks(data.Blocks),
 		modTime: time.Unix(int64(data.Mtim.Sec), int64(data.Mtim.Nsec)).Unix(),
 	}
 }
