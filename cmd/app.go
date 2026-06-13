@@ -222,9 +222,8 @@ Example: -v|--version (provide a flag)
 
 func Execute() {
 	if err := appCmd.Execute(); err != nil {
-		var cliErr *CLIError
 
-		if errors.As(err, &cliErr) {
+		if cliErr, ok := errors.AsType[*CLIError](err); ok {
 			printError(cliErr.Error())
 		} else {
 			printError(render.ReportError(err, debug.Stack()))

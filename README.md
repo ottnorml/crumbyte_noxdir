@@ -148,6 +148,11 @@ noxdir
 The interactive interface initializes immediately without configuration
 requirements.
 
+NoxDir displays allocated disk usage for files and directories, matching the
+space they occupy on disk rather than their apparent logical size. This matters
+for sparse or compressed files, whose apparent size can be much larger than the
+storage they actually consume.
+
 ## 🚩 Flags
 
 NoxDir accepts flags on a startup. Here's a list of currently available
@@ -206,9 +211,9 @@ Flags:
 
                               Example: --simple-color (provide a flag)
 
-  -l, --size-limit string     Define size limits/boundaries for files that should be shown in the
-                              scanner output. Files that do not fit in the provided limits will be
-                              skipped.
+  -l, --size-limit string     Define allocated-size limits/boundaries for files that should be shown
+                              in the scanner output. Files that do not fit in the provided limits
+                              will be skipped.
 
                               The size limits can be defined using format "<size><unit>:<size><unit>
                               where "unit" value can be: KB, MB, GB, TB, PB, and "size" is a positive
